@@ -1,4 +1,4 @@
-import { addOns, categories, products, recommendationIds } from './menu'
+import { addOns, categories, products, recommendationIds } from './menu.ts'
 import type { MenuTemplateData, ThemeColors } from '../types'
 
 export const defaultLight: ThemeColors = {

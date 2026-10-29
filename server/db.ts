@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { createClient } from '@libsql/client'
 import { mkdirSync } from 'node:fs'
-import { demoTemplate } from '../src/data/template'
+import { demoTemplate } from '../src/data/template.ts'
 
 const url = process.env.TURSO_DATABASE_URL || (process.env.VERCEL ? '' : 'file:./data/cardapio.db')
 if (!url) throw new Error('Configure TURSO_DATABASE_URL para usar o editor na Vercel.')

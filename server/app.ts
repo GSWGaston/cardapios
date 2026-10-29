@@ -1,9 +1,9 @@
 import express from 'express'
 import sharp from 'sharp'
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto'
-import { db, initDb } from './db'
-import { templateSchema, validatePublish } from './schema'
-import { emptyTemplate } from '../src/data/template'
+import { db, initDb } from './db.ts'
+import { templateSchema, validatePublish } from './schema.ts'
+import { emptyTemplate } from '../src/data/template.ts'
 
 export const app = express()
 app.disable('x-powered-by')

@@ -14,9 +14,8 @@ import {
   Utensils,
   X,
 } from 'lucide-react'
-import { categories, products } from '../data/menu'
 import { normalize } from '../lib/order'
-import type { CategoryId, Product } from '../types'
+import type { CategoryId, MenuCategory, OptionGroup, Product } from '../types'
 import { ProductCard } from '../components/ProductCard'
 import { FoodImage } from '../components/FoodImage'
 
@@ -29,6 +28,10 @@ const categoryIcons = {
 }
 
 interface Props {
+  categories: MenuCategory[]
+  products: Product[]
+  optionGroups: OptionGroup[]
+  restaurant: { name: string; subtitle: string; description: string }
   category: CategoryId
   setCategory: (id: CategoryId) => void
   query: string
@@ -42,6 +45,10 @@ interface Props {
 }
 
 export function MenuPage({
+  categories,
+  products,
+  optionGroups,
+  restaurant,
   category,
   setCategory,
   query,
@@ -54,20 +61,36 @@ export function MenuPage({
   searchOpen,
 }: Props) {
   const catalogRef = useRef<HTMLElement>(null)
-  const currentCategory = categories.find((item) => item.id === category)!
+  const visibleCategories = categories
+    .filter((item) => item.visible !== false)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  const currentCategory =
+    visibleCategories.find((item) => item.id === category) || visibleCategories[0]
   const normalizedQuery = normalize(query)
-  const filtered = products.filter((product) => {
-    const matchesCategory = normalizedQuery || favoritesOnly || product.category === category
-    const matchesSearch = normalize(`${product.name} ${product.description}`).includes(
-      normalizedQuery,
+  const filtered = products
+    .filter((product) => {
+      if (
+        product.available === false ||
+        !visibleCategories.some((item) => item.id === product.category)
+      )
+        return false
+      const matchesCategory =
+        normalizedQuery || favoritesOnly || product.category === currentCategory?.id
+      const matchesSearch = normalize(`${product.name} ${product.description}`).includes(
+        normalizedQuery,
+      )
+      return matchesCategory && matchesSearch && (!favoritesOnly || favorites.includes(product.id))
+    })
+    .sort(
+      (a, b) =>
+        Number(Boolean(b.featured)) - Number(Boolean(a.featured)) ||
+        (a.order ?? 0) - (b.order ?? 0),
     )
-    return matchesCategory && matchesSearch && (!favoritesOnly || favorites.includes(product.id))
-  })
   const title = normalizedQuery
     ? 'Encontramos para você'
     : favoritesOnly
       ? 'Seus favoritos'
-      : currentCategory.name
+      : currentCategory?.name || 'Cardápio'
 
   function selectCategory(id: CategoryId) {
     setCategory(id)
@@ -80,7 +103,10 @@ export function MenuPage({
       <section className="hero" aria-labelledby="hero-title">
         <FoodImage
           className="hero-image"
-          src="/images/double.webp"
+          src={
+            products.find((item) => item.available !== false && item.image)?.image ||
+            '/images/double.webp'
+          }
           alt="Hambúrguer com queijo derretido, cebola e pão de gergelim"
           loading="eager"
           fetchPriority="high"
@@ -96,7 +122,7 @@ export function MenuPage({
             favorito está <em>aqui.</em>
           </h1>
           <p>
-            Escolha, personalize e aproveite.
+            {restaurant.description || 'Escolha, personalize e aproveite.'}
             <br className="mobile-only" /> O próximo pedido é seu.
           </p>
           <button
@@ -126,8 +152,8 @@ export function MenuPage({
           </span>
         </div>
         <nav className="category-nav" aria-label="Categorias do cardápio">
-          {categories.map((item) => {
-            const Icon = categoryIcons[item.id]
+          {visibleCategories.map((item) => {
+            const Icon = categoryIcons[item.id as keyof typeof categoryIcons] || Utensils
             return (
               <button
                 key={item.id}
@@ -135,7 +161,11 @@ export function MenuPage({
                 aria-pressed={category === item.id && !favoritesOnly && !normalizedQuery}
                 onClick={() => selectCategory(item.id)}
               >
-                <Icon size={20} strokeWidth={1.6} />
+                {item.image ? (
+                  <img className="category-custom-image" src={item.image} alt="" />
+                ) : (
+                  <Icon size={20} strokeWidth={1.6} />
+                )}
                 {item.name}
               </button>
             )
@@ -152,7 +182,7 @@ export function MenuPage({
                 ? `Resultados para “${query.trim()}” em todo o cardápio.`
                 : favoritesOnly
                   ? 'Guarde os sabores que você quer pedir de novo.'
-                  : currentCategory.description}
+                  : currentCategory?.description || 'Explore as opções disponíveis.'}
             </p>
           </div>
           <div className="catalog-tools">
@@ -192,6 +222,9 @@ export function MenuPage({
                 favorite={favorites.includes(product.id)}
                 onFavorite={onFavorite}
                 onAdd={onAdd}
+                requiresSelection={optionGroups.some(
+                  (group) => group.min > 0 && product.groupIds?.includes(group.id),
+                )}
               />
             ))}
           </div>
@@ -227,9 +260,10 @@ export function MenuPage({
       </section>
       <footer className="footer">
         <span>
-          Cardápio<span className="orange-dot">.</span>
+          {restaurant.name || 'Cardápio'}
+          <span className="orange-dot">.</span>
         </span>
-        <p>Boas escolhas. Bons momentos.</p>
+        <p>{restaurant.subtitle || 'Boas escolhas. Bons momentos.'}</p>
         <span className="footer-note">Fotografias ilustrativas.</span>
       </footer>
     </main>

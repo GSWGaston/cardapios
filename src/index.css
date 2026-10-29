@@ -80,6 +80,18 @@ svg {
   width: min(1184px, calc(100% - 80px));
   margin-inline: auto;
 }
+.brand-image {
+  width: auto;
+  max-width: 180px;
+  max-height: 52px;
+  object-fit: contain;
+}
+.category-custom-image {
+  width: 20px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: 4px;
+}
 .site-header {
   background: #fff;
   border-bottom: 1px solid #eeede8;
@@ -2154,5 +2166,222 @@ svg {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+/* Published theme tokens shared by the menu and product detail views. */
+html[data-menu-theme] {
+  background: var(--menu-background);
+  color: var(--menu-text);
+  font-family: var(--menu-font);
+}
+html[data-menu-theme] body {
+  background: var(--menu-background);
+  color: var(--menu-text);
+  font-family: var(--menu-font);
+}
+html[data-menu-theme] h1,
+html[data-menu-theme] h2,
+html[data-menu-theme] h3,
+html[data-menu-theme] h4 {
+  font-family: var(--menu-font);
+}
+html[data-menu-theme] .site-header,
+html[data-menu-theme] .product-card,
+html[data-menu-theme] .search-field,
+html[data-menu-theme] .favorites-filter,
+html[data-menu-theme] .category-button,
+html[data-menu-theme] .nutrition-card,
+html[data-menu-theme] .recommendation-card,
+html[data-menu-theme] .notes-section textarea,
+html[data-menu-theme] .quantity-control,
+html[data-menu-theme] .cart-panel,
+html[data-menu-theme] .cart-item,
+html[data-menu-theme] .toast {
+  background: var(--menu-card);
+  color: var(--menu-text);
+  border-color: var(--menu-border);
+}
+html[data-menu-theme] .site-title,
+html[data-menu-theme] .catalog-intro h2,
+html[data-menu-theme] .category-title h2,
+html[data-menu-theme] .product-info h3,
+html[data-menu-theme] .detail-title h1,
+html[data-menu-theme] .nutrition-heading h2,
+html[data-menu-theme] .extras-heading h2,
+html[data-menu-theme] .section-heading h2,
+html[data-menu-theme] .recommendation-name,
+html[data-menu-theme] .order-product strong,
+html[data-menu-theme] .order-total strong,
+html[data-menu-theme] .cart-heading h2 {
+  color: var(--menu-text);
+}
+html[data-menu-theme] .header-note,
+html[data-menu-theme] .catalog-note,
+html[data-menu-theme] .category-title p,
+html[data-menu-theme] .product-info p,
+html[data-menu-theme] .detail-meta,
+html[data-menu-theme] .detail-title > p,
+html[data-menu-theme] .nutrition-note,
+html[data-menu-theme] .recommendations > p,
+html[data-menu-theme] .recommendation-size,
+html[data-menu-theme] .footer p,
+html[data-menu-theme] .footer-note,
+html[data-menu-theme] .breadcrumb,
+html[data-menu-theme] .notes-count {
+  color: var(--menu-muted);
+}
+html[data-menu-theme] .primary-button,
+html[data-menu-theme] .add-button,
+html[data-menu-theme] .cart-button,
+html[data-menu-theme] .order-add {
+  background: var(--menu-button);
+  border-color: var(--menu-button);
+  color: #fff;
+}
+html[data-menu-theme] .category-button.active,
+html[data-menu-theme] .favorites-filter.active,
+html[data-menu-theme] .recommendation-card.selected {
+  background: var(--menu-selected);
+  border-color: var(--orange);
+}
+html[data-menu-theme] .product-price,
+html[data-menu-theme] .detail-price > strong,
+html[data-menu-theme] .recommendation-card > strong,
+html[data-menu-theme] .extra-price {
+  color: var(--orange);
+}
+html[data-menu-theme] .catalog,
+html[data-menu-theme] .detail-main,
+html[data-menu-theme] .menu-main {
+  background: var(--menu-background);
+}
+html[data-menu-theme] .footer,
+html[data-menu-theme] .order-bar {
+  background: var(--menu-card);
+  color: var(--menu-text);
+  border-color: var(--menu-border);
+}
+html[data-menu-theme] .nutrition-section,
+html[data-menu-theme] .extras-section,
+html[data-menu-theme] .recommendations,
+html[data-menu-theme] .notes-section {
+  border-color: var(--menu-border);
+}
+html[data-menu-theme] .nutrition-ring-track {
+  stroke: var(--menu-border);
+}
+html[data-menu-theme] .nutrition-ring-accent {
+  stroke: var(--orange);
+}
+html[data-menu-theme] .nutrition-number,
+html[data-menu-theme] .nutrition-label {
+  color: var(--menu-text);
+}
+html[data-menu-theme] .search-field input,
+html[data-menu-theme] .notes-section textarea {
+  color: var(--menu-text);
+}
+.detail-ingredients {
+  font-size: 13px;
+  line-height: 1.55;
+}
+.option-group {
+  padding: 24px 0;
+  border-top: 1px solid var(--menu-border, #eae8e2);
+}
+.option-group .section-heading {
+  margin-bottom: 16px;
+}
+.option-group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.option-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--menu-border, #eae8e2);
+  background: var(--menu-card, #fff);
+  color: var(--menu-text, #252522);
+  text-align: left;
+}
+.option-card.selected {
+  border-color: var(--orange);
+  background: var(--menu-selected, #fff4eb);
+}
+.option-card strong {
+  color: var(--orange);
+  white-space: nowrap;
+}
+.option-quantity {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.option-quantity button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--menu-border, #ddd);
+  border-radius: 7px;
+  background: var(--menu-card, #fff);
+  color: var(--menu-text, #252522);
+  font-size: 17px;
+  line-height: 1;
+}
+.option-quantity output {
+  min-width: 14px;
+  text-align: center;
+  font-weight: 750;
+  font-size: 12px;
+}
+.extra-quantity {
+  margin-top: 8px;
+  gap: 4px;
+}
+.extra-quantity button {
+  width: 22px;
+  height: 22px;
+  background: #40483f;
+  color: #fff;
+  border-color: #677167;
+}
+.option-error {
+  color: #aa3222;
+  font-size: 12px;
+  font-weight: 700;
+  grid-column: 1/-1;
+}
+.removable-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.removable-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--menu-card, #fff);
+  color: var(--menu-text, #252522);
+  border: 1px solid var(--menu-border, #eae8e2);
+  border-radius: 9px;
+  padding: 9px 11px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.removable-list input {
+  accent-color: var(--orange);
+  width: 16px;
+  height: 16px;
+}
+@media (max-width: 480px) {
+  .option-group-grid {
+    grid-template-columns: 1fr;
   }
 }

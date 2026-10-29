@@ -8,9 +8,16 @@ interface Props {
   favorite: boolean
   onFavorite: (id: string) => void
   onAdd: (product: Product) => void
+  requiresSelection?: boolean
 }
 
-export function ProductCard({ product, favorite, onFavorite, onAdd }: Props) {
+export function ProductCard({
+  product,
+  favorite,
+  onFavorite,
+  onAdd,
+  requiresSelection = false,
+}: Props) {
   return (
     <article className="product-card">
       <a
@@ -62,15 +69,26 @@ export function ProductCard({ product, favorite, onFavorite, onAdd }: Props) {
       </button>
       <div className="product-action">
         <span className="product-price">{money(product.price)}</span>
-        <button
-          type="button"
-          className="add-button"
-          onClick={() => onAdd(product)}
-          aria-label={`Adicionar ${product.name} ao carrinho`}
-        >
-          <Plus size={17} />
-          <span>Adicionar</span>
-        </button>
+        {requiresSelection ? (
+          <a
+            className="add-button"
+            href={`#/produto/${product.id}`}
+            aria-label={`Personalizar ${product.name}`}
+          >
+            <Plus size={17} />
+            <span>Personalizar</span>
+          </a>
+        ) : (
+          <button
+            type="button"
+            className="add-button"
+            onClick={() => onAdd(product)}
+            aria-label={`Adicionar ${product.name} ao carrinho`}
+          >
+            <Plus size={17} />
+            <span>Adicionar</span>
+          </button>
+        )}
       </div>
     </article>
   )

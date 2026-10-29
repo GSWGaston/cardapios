@@ -10,9 +10,10 @@ const nutrients = [
 
 interface Props {
   nutrition?: NutritionFacts
+  estimated?: boolean
 }
 
-export function NutritionSection({ nutrition }: Props) {
+export function NutritionSection({ nutrition, estimated = true }: Props) {
   return (
     <section className="nutrition-section" aria-labelledby="nutrition-title">
       <div className="nutrition-heading">
@@ -48,8 +49,11 @@ export function NutritionSection({ nutrition }: Props) {
           <p className="nutrition-note">
             <Info size={14} aria-hidden="true" />
             <span>
-              Valores estimados para demonstração. Referem-se ao produto base, sem adicionais ou
-              acompanhamentos. Os anéis são decorativos.
+              {estimated
+                ? 'Valores estimados para demonstração.'
+                : 'Valores informados pelo responsável pelo cardápio.'}{' '}
+              Referem-se ao produto base, sem adicionais ou acompanhamentos. Os anéis são
+              decorativos.
             </span>
           </p>
         </>

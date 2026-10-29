@@ -4,8 +4,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "node scripts/dev.mjs",
+    "dev:client": "vite",
+    "dev:api": "tsx server/local.ts",
+    "build": "tsc -b && tsc -p tsconfig.server.json && vite build",
+    "typecheck:server": "tsc -p tsconfig.server.json",
+    "hash-password": "node scripts/hash-password.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "playwright test",
@@ -16,21 +20,27 @@
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.3.0",
     "@fontsource-variable/manrope": "^5.3.0",
+    "@libsql/client": "^0.18.0",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
     "lucide-react": "^1.63.0",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "oxlint": "^1.89.0",
     "prettier": "^3.9.10",
-    "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "~7.0.2",
     "vite": "^8.3.5"
   }

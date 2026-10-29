@@ -1,95 +1,68 @@
-# Cardápio
+# Cardápio digital
 
-Aplicativo web de cardápio digital, mobile-first, desenvolvido em React, TypeScript, Vite, Tailwind CSS e Lucide React. Duas telas: cardápio e detalhes do produto, com resumo do carrinho em uma janela lateral. Interface neutra, sem marca de restaurante, inspirada nas referências fornecidas.
+Cardápio público em React, TypeScript e Vite, com editor administrativo em `/editor`. O editor gerencia templates independentes, categorias, produtos, adicionais, grupos de opções, recomendações, identidade visual e publicação. O carrinho continua no navegador e não envia pedidos.
 
-## Iniciar localmente
+## Executar localmente
 
-Requisito: Node.js 22.12+ ou 24+. Na pasta `D:\Cardapio`, execute no PowerShell:
+Requer Node.js 22.12+ ou 24+. No PowerShell:
 
 ```powershell
 npm.cmd install
+npm.cmd run hash-password
+```
+
+O último comando solicita uma senha de pelo menos 12 caracteres e imprime apenas o hash. Crie um arquivo `.env` na raiz e cole a linha `ADMIN_PASSWORD_HASH=...` gerada. O arquivo é ignorado pelo Git. Não use a senha em código nem no frontend.
+
+```powershell
 npm.cmd run dev
 ```
 
-Abra o endereço exibido no terminal, normalmente **http://localhost:5173**. Se as dependências já estiverem instaladas, basta executar `npm.cmd run dev`. Para encerrar, pressione `Ctrl+C`.
+Abra o endereço exibido pelo Vite (normalmente `http://localhost:5173`) para o cardápio e `/editor` para a central administrativa. A API local usa a porta 3001 e grava dados e imagens em `data/cardapio.db`. A primeira inicialização cria um **cardápio demonstrativo publicado**, sem nome ou logo de restaurante. Os valores nutricionais desse catálogo são estimativas fictícias. Os templates criados depois podem começar vazios ou ser duplicados.
 
-`npm.cmd` evita o bloqueio de `npm.ps1` pela política de execução do PowerShell. Em macOS, Linux ou CMD, também é possível usar `npm`.
+`npm.cmd` evita o bloqueio de `npm.ps1` em algumas configurações do PowerShell. Em outros terminais, `npm` funciona normalmente.
 
-## Funcionalidades
+## Como editar
 
-- Grade com dois produtos por linha no mobile e adaptação para tablet e desktop.
-- Cinco categorias com dados demonstrativos, fotos locais e preços em reais.
-- Busca global por nome ou descrição, sem distinção entre maiúsculas e acentos.
-- Favoritos persistidos no navegador com `localStorage` e filtro de favoritos.
-- Navegação por links, suporte aos botões voltar/avançar do navegador e URL direta do produto, por exemplo `/#/produto/classico`.
-- Adicionais opcionais com imagens transparentes, seleção visual e preço atualizado.
-- Recomendações que podem ser incluídas e removidas.
-- Quantidade de 1 a 99 e observações de até 300 caracteres.
-- Adição direta pelos cards e adição personalizada pelos detalhes.
-- Indicadores nutricionais ilustrativos por porção na tela de detalhes, com estado de informação indisponível.
-- Carrinho com contador, agrupamento de configurações iguais, edição da quantidade, remoção e total.
-- Confirmação visual ao adicionar, estados vazios e fallback local de imagens.
-- Diálogo nativo com foco contido, fechamento por Escape, labels e suporte a movimento reduzido.
+1. Entre em `/editor` com a senha configurada.
+2. Crie um template vazio ou duplique um existente em **Meus templates**.
+3. Edite identidade visual, categorias, produtos, adicionais, grupos e recomendações.
+4. Selecione **Salvar**. A prévia mobile ou desktop reflete alterações ainda não salvas, mas somente a versão salva pode ser recuperada ao retornar depois.
+5. Selecione **Publicar** para atualizar o cardápio público. Alterações posteriores no template publicado permanecem em rascunho até uma nova publicação.
 
-O carrinho fica no estado local da aplicação e reinicia ao atualizar a página. Os favoritos permanecem no navegador. Não há checkout, autenticação, painel administrativo, backend ou envio real de pedidos.
+Só um template fica publicado por instalação. Para excluir o publicado, publique outro primeiro. Ao excluir uma categoria com produtos, realoque ou exclua esses produtos antes. Fotos e logos aceitam SVG, PNG e JPG de até 2 MB; o servidor valida e converte para WebP. Imagens enviadas ficam no banco, e a remoção de uma imagem no editor remove sua referência do template.
 
-## Regra de cálculo
+Os preços são armazenados em centavos. Os dados nutricionais cadastrados no editor são informados pelo administrador e mostram o produto base; adicionais não alteram esses valores. A seção nutricional só é salva com uma referência de porção. Imagens e valores do catálogo demonstrativo estão identificados como ilustrativos. Favoritos usam o armazenamento do navegador; o carrinho fica apenas no estado da página.
 
-Todos os preços são representados em **centavos inteiros** para evitar erros de ponto flutuante:
+## Arquitetura e segurança
 
-```text
-Total = quantidade × (produto + adicionais selecionados + recomendações selecionadas)
-```
+- `src/App.tsx` carrega o template publicado pela API e reaproveita as telas e componentes existentes. A prévia usa a mesma interface pública.
+- `src/editor/` contém a interface administrativa separada da navegação pública.
+- `server/` oferece API Express, validação no servidor com Zod, sessão em cookie HttpOnly, proteção por origem, limitação de tentativas de login e persistência libSQL.
+- `api/index.ts` e `vercel.json` preparam a API para Vercel Functions e o frontend Vite para rotas `/editor` e `/preview`.
+- `src/data/menu.ts` é apenas o catálogo inicial de demonstração. Depois da primeira inicialização, mudanças publicadas vêm do banco, sem edição de código.
 
-Cada recomendação corresponde a uma porção por unidade do produto principal. A interface informa essa regra. Por exemplo: 2 × (R$ 28,90 + cheddar R$ 3,00 + batata R$ 14,90) = **R$ 93,60**. O contador do carrinho soma as quantidades dos produtos principais; adicionais e recomendações integram a configuração de cada item.
+A senha inicial é fornecida somente como hash `scrypt` em `ADMIN_PASSWORD_HASH`. Sessões são validadas no servidor, expiram após sete dias e podem ser encerradas pelo botão **Sair**. Após cinco tentativas de senha inválida por origem em 15 minutos, o login é bloqueado por 15 minutos. A autorização cobre as rotas de leitura de rascunhos, escrita, publicação e upload. Não há conta pública nem recuperação automática de senha.
 
-Todos os adicionais desta demonstração são opcionais. Assim, os cards permitem adicionar diretamente ao carrinho.
+## Preparar hospedagem na Vercel
 
-## Estrutura
+O arquivo SQLite local não serve como armazenamento persistente em funções sem estado. Antes de publicar na Vercel, provisionar um banco libSQL/Turso persistente e configurar estas variáveis no projeto:
 
 ```text
-src/
-  components/     Imagem com fallback, card, quantidade e diálogo do carrinho
-  data/menu.ts    Categorias, produtos, adicionais e recomendações
-  lib/order.ts    Formatação monetária, cálculos e comparação de configurações
-  pages/          MenuPage e ProductPage
-  types.ts        Tipos compartilhados
-  App.tsx         Navegação e estado do app
-  index.css       Tokens, componentes visuais e responsividade
-public/images/   Fotografias e ingredientes otimizados em WebP
-assets/originals/ Imagens originais para futuras otimizações
-tests/           Testes dos fluxos no navegador
+ADMIN_PASSWORD_HASH=scrypt:<salt>:<hash>
+TURSO_DATABASE_URL=libsql://...
+TURSO_AUTH_TOKEN=...
 ```
 
-Para adaptar o app, altere `src/data/menu.ts` e as fotos em `public/images/`. Os preços usam centavos: `2890` representa R$ 28,90. Consulte [ASSETS.md](ASSETS.md) para as fontes e licenças das imagens.
+Use uma senha e um banco próprios para produção. O build é `npm run build` e a saída estática é `dist`. A API usa a mesma origem do frontend. Nenhuma credencial de produção, banco remoto ou implantação foi configurada neste repositório. Verifique o roteamento das Functions e a conexão com o banco na implantação antes de disponibilizar o editor.
 
-Cada produto pode incluir `nutrition` com `calories` (kcal), `protein`, `carbohydrates` e `fat` (g) e `servingSize`. Os valores atuais são estimativas fictícias para demonstração e mostram apenas o produto base; não incluem adicionais, recomendações ou alterações de quantidade. Se `nutrition` não estiver definido, a tela mostra uma mensagem de informação indisponível. O tipo dos adicionais já aceita informações nutricionais opcionais, mas nenhum adicional traz esses dados nesta demonstração. Para uso real, substitua as estimativas por dados nutricionais verificados.
-
-Para gerar os arquivos WebP a partir dos originais:
-
-```powershell
-node scripts/optimize-images.mjs
-```
-
-## Compilação e verificação
+## Verificação
 
 ```powershell
 npm.cmd run build
-npm.cmd run preview
+npm.cmd run typecheck:server
+npm.cmd test
 ```
 
-O build valida TypeScript e gera `dist/`. O preview permite testar esse resultado localmente.
+Os testes Playwright iniciam uma API e um banco de teste isolados, com senha aleatória guardada somente em `data/`. Cobrem login válido e inválido, bloqueio de APIs sem sessão, rascunhos isolados, salvar, duplicar, excluir, publicar, upload, prévia ao vivo, editor mobile e os fluxos públicos anteriores (busca, categorias, favoritos, adicionais, nutrição, carrinho e responsividade). No Windows, os testes usam Microsoft Edge; em outros sistemas, instale Chromium com `npx playwright install chromium`.
 
-```powershell
-npm.cmd run test:e2e
-```
-
-O comando compila o app e executa os 14 testes Playwright sobre o build de produção. A configuração usa Microsoft Edge no Windows. Em outros sistemas, utiliza Chromium, instalável com `npx playwright install chromium`.
-
-Os testes cobrem busca, categorias, favoritos, imagens, navegação, cálculo da personalização, quantidade, adição direta, carrinho, informações nutricionais por produto, estado indisponível e ausência de transbordamento em 320, 390, 768 e 1440 px.
-
-Com o servidor de desenvolvimento aberto, `npm.cmd run screenshots` gera capturas das duas telas em mobile e desktop na pasta `artifacts/`. Essa pasta e os resultados dos testes são ignorados pelo Git.
-
-## Referências visuais
-
-Os cards claros, as imagens grandes, os favoritos sobrepostos e os botões laranja seguem a referência do cardápio. A seção de adicionais usa o fundo escuro, as fotografias recortadas e os controles circulares da referência de ingredientes. As fotos dos produtos são ilustrativas; o conteúdo pode ser substituído por um catálogo real.
+Para gerar capturas das telas públicas com o servidor de desenvolvimento aberto: `npm.cmd run screenshots`. Consulte [ASSETS.md](ASSETS.md) para fontes e licenças das fotografias ilustrativas.

@@ -21,7 +21,9 @@ test('editor protects APIs, persists isolated drafts, previews and publishes a t
   await expect(page.getByRole('alert')).toContainText('Senha incorreta')
   await page.locator('.ed-password input').fill(process.env.EDITOR_TEST_PASSWORD!)
   await page.getByRole('button', { name: 'Entrar no editor' }).click()
-  await expect(page.getByRole('heading', { name: 'Visão geral' })).toBeVisible()
+  await expect(
+    page.locator('.ed-page-intro').getByRole('heading', { name: 'Meus temas' }),
+  ).toBeVisible()
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.screenshot({ path: 'test-results/editor-overview.png', fullPage: true })
 
@@ -65,7 +67,7 @@ test('editor protects APIs, persists isolated drafts, previews and publishes a t
     duplicateId = ''
 
     await page.reload()
-    await page.getByRole('button', { name: 'Meus templates' }).click()
+    await page.getByRole('button', { name: 'Meus temas' }).click()
     await page
       .locator('.ed-template-card')
       .filter({ hasText: name })
@@ -93,6 +95,7 @@ test('editor protects APIs, persists isolated drafts, previews and publishes a t
     const uploaded = await admin.post(`${base}/api/assets`, {
       data: {
         filename: 'teste.png',
+        templateId: newId,
         data: `data:image/png;base64,${readFileSync('assets/originals/onion.png').toString('base64')}`,
       },
     })
@@ -105,6 +108,7 @@ test('editor protects APIs, persists isolated drafts, previews and publishes a t
     const svgUpload = await admin.post(`${base}/api/assets`, {
       data: {
         filename: 'logo.svg',
+        templateId: newId,
         data: `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`,
       },
     })
@@ -112,6 +116,7 @@ test('editor protects APIs, persists isolated drafts, previews and publishes a t
     const unsafeSvg = await admin.post(`${base}/api/assets`, {
       data: {
         filename: 'unsafe.svg',
+        templateId: newId,
         data: `data:image/svg+xml;base64,${Buffer.from('<svg><script>alert(1)</script></svg>').toString('base64')}`,
       },
     })

@@ -1,7 +1,6 @@
 import 'dotenv/config'
 import { createClient } from '@libsql/client'
 import { mkdirSync } from 'node:fs'
-import { demoTemplate } from '../src/data/template.ts'
 
 const url = process.env.TURSO_DATABASE_URL || (process.env.VERCEL ? '' : 'file:./data/cardapio.db')
 if (!url) throw new Error('Configure TURSO_DATABASE_URL para usar o editor na Vercel.')
@@ -28,29 +27,22 @@ export function initDb() {
         client_key TEXT PRIMARY KEY, count INTEGER NOT NULL, window_start INTEGER NOT NULL,
         locked_until INTEGER NOT NULL
       )`,
+        `CREATE TABLE IF NOT EXISTS project_docs (
+        template_id TEXT PRIMARY KEY, content TEXT NOT NULL
+      )`,
+        `CREATE TABLE IF NOT EXISTS project_captures (
+        id TEXT PRIMARY KEY, template_id TEXT NOT NULL, title TEXT NOT NULL,
+        description TEXT NOT NULL, screen TEXT NOT NULL, device TEXT NOT NULL,
+        mode TEXT NOT NULL, state TEXT NOT NULL, mime TEXT NOT NULL,
+        data BLOB NOT NULL, created_at TEXT NOT NULL, position INTEGER NOT NULL
+      )`,
+        `CREATE TABLE IF NOT EXISTS asset_owners (
+        asset_id TEXT NOT NULL, template_id TEXT NOT NULL,
+        PRIMARY KEY (asset_id, template_id)
+      )`,
       ],
       'write',
     )
-    const result = await db.execute('SELECT COUNT(*) AS total FROM templates')
-    if (Number(result.rows[0]?.total) === 0) {
-      const id = 'demo'
-      const json = JSON.stringify(demoTemplate())
-      const tx = await db.transaction('write')
-      try {
-        await tx.execute({
-          sql: 'INSERT OR IGNORE INTO templates VALUES (?, ?, ?, ?, ?)',
-          args: [id, 'Cardápio demonstrativo', json, json, new Date().toISOString()],
-        })
-        await tx.execute({
-          sql: 'INSERT OR IGNORE INTO settings VALUES (?, ?)',
-          args: ['published_id', id],
-        })
-        await tx.commit()
-      } catch (error) {
-        await tx.rollback()
-        throw error
-      }
-    }
   })().catch((error) => {
     ready = undefined
     throw error

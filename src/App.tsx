@@ -21,6 +21,9 @@ function readFavorites(): string[] {
 export default function App() {
   const previewId =
     window.location.pathname === '/preview' ? new URLSearchParams(location.search).get('id') : null
+  const embeddedPreview = Boolean(
+    previewId && new URLSearchParams(location.search).get('embedded') === '1',
+  )
   const [menu, setMenu] = useState<MenuTemplateData | null>(null)
   const [loadError, setLoadError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
@@ -49,6 +52,7 @@ export default function App() {
   const count = cart.reduce((sum, item) => sum + item.quantity, 0)
 
   useEffect(() => {
+    if (embeddedPreview) return
     let cancelled = false
     async function load() {
       try {
@@ -75,7 +79,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [previewId, reloadKey])
+  }, [previewId, reloadKey, embeddedPreview])
 
   useEffect(() => {
     if (!previewId) return
@@ -85,6 +89,7 @@ export default function App() {
       if (!data?.categories || !data.products || !data.themes) return
       previewReceived.current = true
       setMenu(data)
+      document.documentElement.dataset.previewContext = event.data.context || 'overview'
       setCategory((previous) =>
         data.categories.some((item) => item.id === previous)
           ? previous
@@ -93,7 +98,10 @@ export default function App() {
     }
     window.addEventListener('message', receive)
     window.parent.postMessage({ type: 'cardapio-preview-ready' }, location.origin)
-    return () => window.removeEventListener('message', receive)
+    return () => {
+      window.removeEventListener('message', receive)
+      delete document.documentElement.dataset.previewContext
+    }
   }, [previewId])
 
   useEffect(() => {

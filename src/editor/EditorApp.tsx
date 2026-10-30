@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   FolderOpen,
+  FileArchive,
   ImagePlus,
   LayoutDashboard,
   LogOut,
@@ -33,7 +34,12 @@ import type {
   OptionGroup,
   Product,
   ThemeColors,
+  ProjectDocs,
+  ProjectCapture,
 } from '../types'
+import { IdentityPreview } from './IdentityPreview'
+import type { PreviewGroup } from './IdentityPreview'
+import { ProjectPanel } from './ProjectPanel'
 import './editor.css'
 
 type Section =
@@ -45,19 +51,66 @@ type Section =
   | 'addons'
   | 'recommendations'
   | 'preview'
+  | 'project'
   | 'settings'
 const sections: { id: Section; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
-  { id: 'templates', label: 'Meus templates', icon: FolderOpen },
+  { id: 'templates', label: 'Meus temas', icon: FolderOpen },
   { id: 'identity', label: 'Identidade visual', icon: Palette },
   { id: 'categories', label: 'Categorias', icon: Tag },
   { id: 'products', label: 'Produtos', icon: ShoppingBag },
   { id: 'addons', label: 'Adicionais', icon: Plus },
   { id: 'recommendations', label: 'Recomendações', icon: Sparkles },
   { id: 'preview', label: 'Pré-visualização', icon: Eye },
+  { id: 'project', label: 'Projeto e Código', icon: FileArchive },
   { id: 'settings', label: 'Configurações', icon: Settings },
 ]
 type Modal = { kind: 'create' | 'saveAs' | 'rename' | 'delete' | 'publish'; id?: string } | null
+type ColorKey = Exclude<keyof ThemeColors, 'logo' | 'nameImage'>
+const blankProjectDocs: ProjectDocs = {
+  title: '',
+  description: '',
+  establishment: '',
+  audience: '',
+  technologies: '',
+  siteUrl: '',
+  repositoryUrl: '',
+  codeRef: '',
+  architecture: '',
+  operations: '',
+  notes: '',
+  aiInstructions: '',
+}
+const colorGroups: { id: PreviewGroup; label: string; fields: [ColorKey, string][] }[] = [
+  {
+    id: 'structure',
+    label: 'Estrutura e fundos',
+    fields: [
+      ['background', 'Fundo'],
+      ['secondary', 'Secundária'],
+    ],
+  },
+  { id: 'cards', label: 'Cards de produtos', fields: [['card', 'Cards']] },
+  {
+    id: 'actions',
+    label: 'Botões e ações',
+    fields: [
+      ['button', 'Botões'],
+      ['primary', 'Principal'],
+    ],
+  },
+  {
+    id: 'typography',
+    label: 'Textos e tipografia',
+    fields: [
+      ['text', 'Textos'],
+      ['muted', 'Textos secundários'],
+    ],
+  },
+  { id: 'icons', label: 'Ícones e indicadores', fields: [['icon', 'Ícones']] },
+  { id: 'selection', label: 'Seleção e navegação', fields: [['selected', 'Selecionados']] },
+  { id: 'borders', label: 'Bordas e detalhes', fields: [['border', 'Bordas']] },
+]
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch('/api' + path, {
@@ -158,10 +211,12 @@ function ImageField({
   label,
   value,
   onChange,
+  templateId,
 }: {
   label: string
   value?: string
   onChange: (url: string) => void
+  templateId: string
 }) {
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState('')
@@ -181,7 +236,11 @@ function ImageField({
       const data = String(reader.result)
       setPreview(data)
       try {
-        const result = await send<{ url: string }>('/assets', 'POST', { filename: file.name, data })
+        const result = await send<{ url: string }>('/assets', 'POST', {
+          filename: file.name,
+          data,
+          templateId,
+        })
         onChange(result.url)
         setPreview('')
       } catch (cause) {
@@ -246,14 +305,28 @@ export function EditorApp() {
   const [draft, setDraft] = useState<MenuTemplateData>(emptyTemplate)
   const [templateName, setTemplateName] = useState('')
   const [unsaved, setUnsaved] = useState(false)
-  const [section, setSection] = useState<Section>('overview')
+  const [section, setSection] = useState<Section>('templates')
   const [modal, setModal] = useState<Modal>(null)
   const [modalName, setModalName] = useState('')
+  const [createSourceId, setCreateSourceId] = useState('')
+  const [themeSearch, setThemeSearch] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [mobileNav, setMobileNav] = useState(false)
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light')
+  const [colorGroup, setColorGroup] = useState<PreviewGroup>('structure')
+  const [colorGroupRevision, setColorGroupRevision] = useState(0)
+  const [hexDrafts, setHexDrafts] = useState<Record<string, string>>({})
+  const [projectDocs, setProjectDocs] = useState<ProjectDocs>(blankProjectDocs)
+  const [savedProjectDocs, setSavedProjectDocs] = useState<ProjectDocs>(blankProjectDocs)
+  const [projectCaptures, setProjectCaptures] = useState<ProjectCapture[]>([])
+  const [projectDirty, setProjectDirty] = useState(false)
+  const [projectPublished, setProjectPublished] = useState(false)
+  const [codeExportAvailable, setCodeExportAvailable] = useState(false)
+  const [exportVersion, setExportVersion] = useState<'draft' | 'published'>('draft')
+  const [exportCaptures, setExportCaptures] = useState(true)
+  const [exportAssets, setExportAssets] = useState(true)
   const [productId, setProductId] = useState('')
   const [addonId, setAddonId] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -263,6 +336,11 @@ export function EditorApp() {
   const [previewPage, setPreviewPage] = useState('')
   const [previewVersion, setPreviewVersion] = useState(0)
   const current = templates.find((item) => item.id === currentId)
+  const visibleTemplates = templates.filter((item) =>
+    `${item.name} ${item.draft.restaurant.name}`
+      .toLocaleLowerCase('pt-BR')
+      .includes(themeSearch.toLocaleLowerCase('pt-BR')),
+  )
   const selectedProduct = draft.products.find((item) => item.id === productId)
   const selectedAddon = draft.addOns.find((item) => item.id === addonId)
   const selectedCategory = draft.categories.find((item) => item.id === categoryId)
@@ -305,15 +383,42 @@ export function EditorApp() {
       )
   }, [authenticated])
   useEffect(() => {
+    if (!authenticated || !currentId) return
+    let cancelled = false
+    api<{
+      docs: ProjectDocs
+      captures: ProjectCapture[]
+      hasPublishedVersion: boolean
+      codeExportAvailable: boolean
+    }>(`/templates/${currentId}/project`)
+      .then((value) => {
+        if (!cancelled) {
+          setProjectDocs(value.docs)
+          setSavedProjectDocs(value.docs)
+          setProjectCaptures(value.captures)
+          setProjectPublished(value.hasPublishedVersion)
+          setCodeExportAvailable(value.codeExportAvailable)
+          setProjectDirty(false)
+        }
+      })
+      .catch((cause) => {
+        if (!cancelled)
+          setError(cause instanceof Error ? cause.message : 'Falha ao carregar projeto.')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [authenticated, currentId])
+  useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (unsaved) {
+      if (unsaved || projectDirty) {
         event.preventDefault()
         event.returnValue = ''
       }
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [unsaved])
+  }, [unsaved, projectDirty])
   useEffect(() => {
     if (!notice) return
     const timer = window.setTimeout(() => setNotice(''), 4000)
@@ -358,6 +463,12 @@ export function EditorApp() {
         setDraft(emptyTemplate())
         setTemplateName('')
         setUnsaved(false)
+        setProjectDocs(blankProjectDocs)
+        setSavedProjectDocs(blankProjectDocs)
+        setProjectCaptures([])
+        setProjectPublished(false)
+        setCodeExportAvailable(false)
+        setProjectDirty(false)
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Falha ao carregar templates.')
@@ -372,16 +483,36 @@ export function EditorApp() {
     setUnsaved(true)
   }
   function switchTemplate(item: MenuTemplate) {
-    if (unsaved && !window.confirm('Descartar alterações não salvas?')) return
+    if ((unsaved || projectDirty) && !window.confirm('Descartar alterações não salvas?')) return
     setCurrentId(item.id)
     setDraft(structuredClone(item.draft))
     setTemplateName(item.name)
     setUnsaved(false)
+    if (item.id === currentId) {
+      setProjectDocs(savedProjectDocs)
+      setProjectDirty(false)
+    }
     setProductId('')
     setAddonId('')
     setCategoryId('')
     setGroupId('')
-    setSection('overview')
+    setSection('identity')
+  }
+  function openLibrary() {
+    if (
+      (unsaved || projectDirty) &&
+      !window.confirm('Descartar alterações não salvas e voltar aos temas?')
+    )
+      return
+    if ((unsaved || projectDirty) && current) {
+      setDraft(structuredClone(current.draft))
+      setTemplateName(current.name)
+      setUnsaved(false)
+      setProjectDirty(false)
+      setProjectDocs(savedProjectDocs)
+    }
+    setSection('templates')
+    setMobileNav(false)
   }
   async function run(action: () => Promise<void>) {
     setBusy(true)
@@ -397,7 +528,10 @@ export function EditorApp() {
   async function save() {
     if (!currentId) throw new Error('Crie um template antes de salvar.')
     await send(`/templates/${currentId}`, 'PUT', { name: templateName, draft })
+    if (projectDirty) await send(`/templates/${currentId}/project`, 'PUT', projectDocs)
     await refresh(currentId)
+    setProjectDirty(false)
+    setSavedProjectDocs(projectDocs)
     setNotice('Alterações salvas com sucesso.')
   }
   async function login(event: React.FormEvent) {
@@ -416,8 +550,12 @@ export function EditorApp() {
         const result = await send<{ id: string }>(
           '/templates',
           'POST',
-          modal.kind === 'create' ? { name: modalName } : { name: modalName, draft },
+          modal.kind === 'create'
+            ? { name: modalName, sourceId: createSourceId || undefined }
+            : { name: modalName, draft, copyProjectFrom: currentId },
         )
+        if (modal.kind === 'saveAs')
+          await send(`/templates/${result.id}/project`, 'PUT', projectDocs)
         setModal(null)
         await refresh(result.id)
         setSection('identity')
@@ -439,16 +577,22 @@ export function EditorApp() {
       } else {
         if (modal.id === currentId && unsaved)
           await send(`/templates/${currentId}`, 'PUT', { name: templateName, draft })
+        if (modal.id === currentId && projectDirty) {
+          await send(`/templates/${currentId}/project`, 'PUT', projectDocs)
+          setSavedProjectDocs(projectDocs)
+          setProjectDirty(false)
+        }
         await send(`/templates/${modal.id}/publish`, 'POST')
         setModal(null)
         await refresh(modal.id)
+        setProjectPublished(true)
         setNotice('Cardápio publicado.')
       }
     })
   }
   function openModal(kind: NonNullable<Modal>['kind'], id?: string) {
     if (
-      unsaved &&
+      (unsaved || projectDirty) &&
       (kind === 'create' ||
         kind === 'delete' ||
         (id !== currentId && (kind === 'rename' || kind === 'publish'))) &&
@@ -456,6 +600,7 @@ export function EditorApp() {
     )
       return
     setError('')
+    if (kind === 'create') setCreateSourceId('')
     setModalName(kind === 'rename' ? templates.find((item) => item.id === id)?.name || '' : '')
     setModal({ kind, id })
   }
@@ -619,7 +764,8 @@ export function EditorApp() {
               key={id}
               className={section === id ? 'active' : ''}
               onClick={() => {
-                setSection(id)
+                if (id === 'templates') openLibrary()
+                else setSection(id)
                 setMobileNav(false)
               }}
             >
@@ -638,6 +784,13 @@ export function EditorApp() {
               run(async () => {
                 await send('/auth/logout', 'POST')
                 setAuthenticated(false)
+                setCurrentId('')
+                setProjectDocs(blankProjectDocs)
+                setSavedProjectDocs(blankProjectDocs)
+                setProjectCaptures([])
+                setProjectPublished(false)
+                setCodeExportAvailable(false)
+                setProjectDirty(false)
               })
             }
           >
@@ -662,19 +815,31 @@ export function EditorApp() {
           >
             <Menu size={23} />
           </button>
+          {current && section !== 'templates' && draft.themes[themeMode].logo && (
+            <img
+              className="ed-top-logo"
+              src={draft.themes[themeMode].logo}
+              alt="Logotipo do tema em edição"
+            />
+          )}
           <div>
             <span className="ed-breadcrumb">
-              Central de edição <ChevronRight size={14} />{' '}
-              {sections.find((item) => item.id === section)?.label}
+              {current && section !== 'templates' ? templateName : 'Central de edição'}{' '}
+              <ChevronRight size={14} /> {sections.find((item) => item.id === section)?.label}
             </span>
             <h1>{sections.find((item) => item.id === section)?.label}</h1>
           </div>
           <div className="ed-top-actions">
-            {unsaved && <span className="ed-unsaved">Alterações não salvas</span>}
+            {current && section !== 'templates' && (
+              <span className="ed-editor-theme-status">
+                {current.published ? 'Em destaque' : 'Rascunho'}
+              </span>
+            )}
+            {(unsaved || projectDirty) && <span className="ed-unsaved">Alterações não salvas</span>}
             <button
               className="ed-button ed-primary"
               onClick={() => run(save)}
-              disabled={busy || !currentId}
+              disabled={busy || !currentId || section === 'templates'}
             >
               <Save size={17} />
               Salvar
@@ -802,108 +967,127 @@ export function EditorApp() {
               <div className="ed-page-intro">
                 <div>
                   <span className="ed-kicker">BIBLIOTECA</span>
-                  <h2>Seus cardápios, no seu ritmo.</h2>
-                  <p>Edite, duplique e publique templates independentes.</p>
+                  <h2>Meus temas</h2>
+                  <p>Cada tema guarda um restaurante completo e independente.</p>
                 </div>
                 <button className="ed-button ed-primary" onClick={() => openModal('create')}>
                   <Plus size={18} />
-                  Novo template
+                  Criar novo tema
                 </button>
               </div>
+              {templates.length > 3 && (
+                <label className="ed-field ed-theme-search">
+                  <span>Pesquisar temas</span>
+                  <input
+                    value={themeSearch}
+                    onChange={(event) => setThemeSearch(event.target.value)}
+                    placeholder="Nome do tema ou restaurante"
+                  />
+                </label>
+              )}
               {templates.length ? (
-                <div className="ed-template-grid">
-                  {templates.map((item) => (
-                    <article className="ed-template-card" key={item.id}>
-                      <div
-                        className="ed-template-preview"
-                        style={{ background: item.draft.themes.light.background }}
-                      >
+                visibleTemplates.length ? (
+                  <div className="ed-template-grid">
+                    {visibleTemplates.map((item) => (
+                      <article className="ed-template-card" key={item.id}>
                         <div
-                          className="ed-template-preview-bar"
-                          style={{ background: item.draft.themes.light.card }}
-                        />
-                        {item.draft.themes.light.logo ? (
-                          <img src={item.draft.themes.light.logo} alt="" />
-                        ) : (
-                          <Palette size={36} color={item.draft.themes.light.primary} />
-                        )}
-                      </div>
-                      <div className="ed-template-body">
-                        <div className="ed-template-title">
-                          <div>
-                            <small>{item.draft.restaurant.name || 'Restaurante sem nome'}</small>
-                            <h3>{item.name}</h3>
+                          className="ed-template-preview"
+                          style={{ background: item.draft.themes.light.background }}
+                        >
+                          <div
+                            className="ed-template-preview-bar"
+                            style={{ background: item.draft.themes.light.card }}
+                          />
+                          {item.draft.themes.light.logo ? (
+                            <img src={item.draft.themes.light.logo} alt="" />
+                          ) : (
+                            <Palette size={36} color={item.draft.themes.light.primary} />
+                          )}
+                        </div>
+                        <div className="ed-template-body">
+                          <div className="ed-template-title">
+                            <div>
+                              <small>{item.draft.restaurant.name || 'Restaurante sem nome'}</small>
+                              <h3>{item.name}</h3>
+                            </div>
+                            {item.published && (
+                              <span className="ed-pill">Em destaque · publicado</span>
+                            )}
                           </div>
-                          {item.published && <span className="ed-pill">Publicado</span>}
-                        </div>
-                        <p>Alterado em {new Date(item.updatedAt).toLocaleDateString('pt-BR')}</p>
-                        <div className="ed-template-actions">
-                          <button
-                            className="ed-button ed-primary"
-                            onClick={() => switchTemplate(item)}
-                          >
-                            Abrir e editar
-                          </button>
-                          <button
-                            className="ed-icon-button"
-                            title="Duplicar"
-                            aria-label={`Duplicar ${item.name}`}
-                            onClick={() => {
-                              if (
-                                unsaved &&
-                                !window.confirm(
-                                  'Descartar alterações não salvas antes de duplicar?',
+                          <p>Alterado em {new Date(item.updatedAt).toLocaleDateString('pt-BR')}</p>
+                          <div className="ed-template-actions">
+                            <button
+                              className="ed-button ed-primary"
+                              onClick={() => switchTemplate(item)}
+                            >
+                              Abrir e editar
+                            </button>
+                            <button
+                              className="ed-icon-button"
+                              title="Duplicar"
+                              aria-label={`Duplicar ${item.name}`}
+                              onClick={() => {
+                                if (
+                                  (unsaved || projectDirty) &&
+                                  !window.confirm(
+                                    'Descartar alterações não salvas antes de duplicar?',
+                                  )
                                 )
-                              )
-                                return
-                              run(async () => {
-                                const result = await send<{ id: string }>('/templates', 'POST', {
-                                  name: `${item.name} — cópia`,
-                                  sourceId: item.id,
+                                  return
+                                run(async () => {
+                                  const result = await send<{ id: string }>('/templates', 'POST', {
+                                    name: `${item.name} — cópia`,
+                                    sourceId: item.id,
+                                  })
+                                  await refresh(result.id)
+                                  setNotice('Template duplicado.')
                                 })
-                                await refresh(result.id)
-                                setNotice('Template duplicado.')
-                              })
-                            }}
-                          >
-                            <Copy size={17} />
-                          </button>
-                          <button
-                            className="ed-icon-button"
-                            title="Renomear"
-                            aria-label={`Renomear ${item.name}`}
-                            onClick={() => openModal('rename', item.id)}
-                          >
-                            <Tag size={17} />
-                          </button>
-                          <button
-                            className="ed-icon-button"
-                            title="Publicar"
-                            aria-label={`Publicar ${item.name}`}
-                            onClick={() => openModal('publish', item.id)}
-                          >
-                            <Upload size={17} />
-                          </button>
-                          <button
-                            className="ed-icon-button ed-danger"
-                            title="Excluir"
-                            aria-label={`Excluir ${item.name}`}
-                            disabled={item.published}
-                            onClick={() => openModal('delete', item.id)}
-                          >
-                            <Trash2 size={17} />
-                          </button>
+                              }}
+                            >
+                              <Copy size={17} />
+                            </button>
+                            <button
+                              className="ed-icon-button"
+                              title="Renomear"
+                              aria-label={`Renomear ${item.name}`}
+                              onClick={() => openModal('rename', item.id)}
+                            >
+                              <Tag size={17} />
+                            </button>
+                            <button
+                              className="ed-button ed-secondary"
+                              aria-label={`${item.published ? 'Publicar alterações de' : 'Selecionar como tema em destaque'} ${item.name}`}
+                              onClick={() => openModal('publish', item.id)}
+                            >
+                              <Upload size={17} />{' '}
+                              {item.published ? 'Publicar alterações' : 'Selecionar destaque'}
+                            </button>
+                            <button
+                              className="ed-icon-button ed-danger"
+                              title="Excluir"
+                              aria-label={`Excluir ${item.name}`}
+                              disabled={item.published}
+                              onClick={() => openModal('delete', item.id)}
+                            >
+                              <Trash2 size={17} />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="ed-empty">Nenhum tema encontrado para esta pesquisa.</div>
+                )
               ) : (
                 <div className="ed-empty">
                   <FolderOpen size={35} />
-                  <h3>Nenhum template criado</h3>
+                  <h3>Nenhum tema criado</h3>
+                  <p>
+                    Crie um tema vazio para começar. Nenhum restaurante será criado automaticamente.
+                  </p>
                   <button className="ed-button ed-primary" onClick={() => openModal('create')}>
-                    Criar primeiro template
+                    Criar primeiro tema
                   </button>
                 </div>
               )}
@@ -919,161 +1103,220 @@ export function EditorApp() {
                 </div>
               </div>
               <div className="ed-two-col">
-                <section className="ed-panel">
-                  <h3>Dados do restaurante</h3>
-                  <div className="ed-form-grid">
-                    <Input
-                      label="Nome do restaurante"
-                      value={draft.restaurant.name}
+                <div className="ed-identity-column">
+                  <section className="ed-panel">
+                    <h3>Dados do restaurante</h3>
+                    <div className="ed-form-grid">
+                      <Input
+                        label="Nome do restaurante"
+                        value={draft.restaurant.name}
+                        onChange={(value) =>
+                          edit((data) => {
+                            data.restaurant.name = value
+                          })
+                        }
+                      />
+                      <Input
+                        label="Subtítulo"
+                        value={draft.restaurant.subtitle}
+                        onChange={(value) =>
+                          edit((data) => {
+                            data.restaurant.subtitle = value
+                          })
+                        }
+                      />
+                    </div>
+                    <Textarea
+                      label="Descrição curta"
+                      value={draft.restaurant.description}
                       onChange={(value) =>
                         edit((data) => {
-                          data.restaurant.name = value
+                          data.restaurant.description = value
                         })
                       }
                     />
-                    <Input
-                      label="Subtítulo"
-                      value={draft.restaurant.subtitle}
-                      onChange={(value) =>
-                        edit((data) => {
-                          data.restaurant.subtitle = value
-                        })
-                      }
+                    <label className="ed-field">
+                      <span>Apresentação do nome</span>
+                      <select
+                        value={draft.restaurant.display}
+                        onChange={(event) =>
+                          edit((data) => {
+                            data.restaurant.display = event.target.value as
+                              'text' | 'logo' | 'image'
+                          })
+                        }
+                      >
+                        <option value="text">Texto</option>
+                        <option value="logo">Logotipo</option>
+                        <option value="image">Imagem com nome estilizado</option>
+                      </select>
+                    </label>
+                  </section>
+                  <section className="ed-panel">
+                    <h3>Modos visuais</h3>
+                    <div className="ed-tabs">
+                      <button
+                        className={themeMode === 'light' ? 'active' : ''}
+                        onClick={() => setThemeMode('light')}
+                      >
+                        Modo claro
+                      </button>
+                      <button
+                        className={themeMode === 'dark' ? 'active' : ''}
+                        onClick={() => setThemeMode('dark')}
+                      >
+                        Modo escuro
+                      </button>
+                    </div>
+                    <ImageField
+                      templateId={currentId}
+                      label="Logotipo"
+                      value={theme.logo}
+                      onChange={(value) => updateColor('logo', value)}
                     />
-                  </div>
-                  <Textarea
-                    label="Descrição curta"
-                    value={draft.restaurant.description}
-                    onChange={(value) =>
-                      edit((data) => {
-                        data.restaurant.description = value
-                      })
-                    }
-                  />
-                  <label className="ed-field">
-                    <span>Apresentação do nome</span>
-                    <select
-                      value={draft.restaurant.display}
-                      onChange={(event) =>
-                        edit((data) => {
-                          data.restaurant.display = event.target.value as 'text' | 'logo' | 'image'
-                        })
-                      }
-                    >
-                      <option value="text">Texto</option>
-                      <option value="logo">Logotipo</option>
-                      <option value="image">Imagem com nome estilizado</option>
-                    </select>
-                  </label>
-                  <label className="ed-field">
-                    <span>Fonte</span>
-                    <select
-                      value={draft.font}
-                      onChange={(event) =>
-                        edit((data) => {
-                          data.font = event.target.value as 'dm-sans' | 'manrope'
-                        })
-                      }
-                    >
-                      <option value="dm-sans">DM Sans</option>
-                      <option value="manrope">Manrope</option>
-                    </select>
-                  </label>
-                </section>
-                <section className="ed-panel">
-                  <h3>Temas</h3>
-                  <div className="ed-tabs">
-                    <button
-                      className={themeMode === 'light' ? 'active' : ''}
-                      onClick={() => setThemeMode('light')}
-                    >
-                      Tema claro
-                    </button>
-                    <button
-                      className={themeMode === 'dark' ? 'active' : ''}
-                      onClick={() => setThemeMode('dark')}
-                    >
-                      Tema escuro
-                    </button>
-                  </div>
-                  <ImageField
-                    label="Logotipo"
-                    value={theme.logo}
-                    onChange={(value) => updateColor('logo', value)}
-                  />
-                  <ImageField
-                    label="Imagem com nome"
-                    value={theme.nameImage}
-                    onChange={(value) => updateColor('nameImage', value)}
-                  />
-                  <div className="ed-color-grid">
-                    {(
-                      [
-                        ['background', 'Fundo'],
-                        ['card', 'Cards'],
-                        ['primary', 'Principal'],
-                        ['secondary', 'Secundária'],
-                        ['button', 'Botões'],
-                        ['text', 'Textos'],
-                        ['muted', 'Textos secundários'],
-                        ['border', 'Bordas'],
-                        ['icon', 'Ícones'],
-                        ['selected', 'Selecionados'],
-                      ] as [keyof ThemeColors, string][]
-                    ).map(([key, label]) => (
-                      <label className="ed-color" key={key}>
-                        <span>{label}</span>
-                        <span>
-                          <input
-                            type="color"
-                            value={theme[key] || '#000000'}
-                            onChange={(event) => updateColor(key, event.target.value)}
-                          />
-                          <input
-                            aria-label={`${label} HEX`}
-                            value={theme[key] || ''}
-                            onChange={(event) => updateColor(key, event.target.value)}
-                            maxLength={7}
-                          />
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  <div className="ed-inline-actions">
-                    <button
-                      className="ed-button ed-secondary"
-                      onClick={() =>
-                        edit((data) => {
-                          data.themes[themeMode] = {
-                            ...(themeMode === 'light' ? defaultLight : defaultDark),
+                    <ImageField
+                      templateId={currentId}
+                      label="Imagem com nome"
+                      value={theme.nameImage}
+                      onChange={(value) => updateColor('nameImage', value)}
+                    />
+                    <div className="ed-palette-groups" aria-label="Grupos de aparência">
+                      {colorGroups.map((group) => (
+                        <button
+                          key={group.id}
+                          type="button"
+                          className={colorGroup === group.id ? 'active' : ''}
+                          onClick={() => {
+                            setColorGroup(group.id)
+                            setColorGroupRevision((revision) => revision + 1)
+                          }}
+                        >
+                          {group.label}
+                        </button>
+                      ))}
+                    </div>
+                    <h4>{colorGroups.find((group) => group.id === colorGroup)?.label}</h4>
+                    {colorGroup === 'typography' && (
+                      <label className="ed-field">
+                        <span>Fonte</span>
+                        <select
+                          value={draft.font}
+                          onChange={(event) =>
+                            edit((data) => {
+                              data.font = event.target.value as 'dm-sans' | 'manrope'
+                            })
                           }
-                        })
-                      }
-                    >
-                      Restaurar cores
-                    </button>
-                    {themeMode === 'dark' && (
+                        >
+                          <option value="dm-sans">DM Sans</option>
+                          <option value="manrope">Manrope</option>
+                        </select>
+                      </label>
+                    )}
+                    <div className="ed-color-grid">
+                      {colorGroups
+                        .find((group) => group.id === colorGroup)!
+                        .fields.map(([key, label]) => (
+                          <label className="ed-color" key={key}>
+                            <span>{label}</span>
+                            <span>
+                              <input
+                                type="color"
+                                value={theme[key] || '#000000'}
+                                onChange={(event) => {
+                                  setHexDrafts((previous) => {
+                                    const next = { ...previous }
+                                    delete next[`${themeMode}:${key}`]
+                                    return next
+                                  })
+                                  updateColor(key, event.target.value)
+                                }}
+                              />
+                              <input
+                                aria-label={`${label} HEX`}
+                                aria-invalid={
+                                  hexDrafts[`${themeMode}:${key}`] !== undefined &&
+                                  !/^#[0-9a-fA-F]{6}$/.test(hexDrafts[`${themeMode}:${key}`])
+                                }
+                                aria-describedby={
+                                  hexDrafts[`${themeMode}:${key}`] !== undefined &&
+                                  !/^#[0-9a-fA-F]{6}$/.test(hexDrafts[`${themeMode}:${key}`])
+                                    ? `ed-hex-${themeMode}-${key}`
+                                    : undefined
+                                }
+                                value={hexDrafts[`${themeMode}:${key}`] ?? theme[key] ?? ''}
+                                onChange={(event) => {
+                                  const value = event.target.value
+                                  setHexDrafts((previous) => ({
+                                    ...previous,
+                                    [`${themeMode}:${key}`]: value,
+                                  }))
+                                  if (/^#[0-9a-fA-F]{6}$/.test(value)) updateColor(key, value)
+                                }}
+                                onBlur={() =>
+                                  setHexDrafts((previous) => {
+                                    const next = { ...previous }
+                                    delete next[`${themeMode}:${key}`]
+                                    return next
+                                  })
+                                }
+                                maxLength={7}
+                              />
+                            </span>
+                            {hexDrafts[`${themeMode}:${key}`] !== undefined &&
+                              !/^#[0-9a-fA-F]{6}$/.test(hexDrafts[`${themeMode}:${key}`]) && (
+                                <small className="ed-color-error" id={`ed-hex-${themeMode}-${key}`}>
+                                  Complete o código HEX para atualizar a prévia.
+                                </small>
+                              )}
+                          </label>
+                        ))}
+                    </div>
+                    <div className="ed-inline-actions">
                       <button
                         className="ed-button ed-secondary"
                         onClick={() =>
                           edit((data) => {
-                            data.themes.dark = { ...data.themes.light }
+                            data.themes[themeMode] = {
+                              ...(themeMode === 'light' ? defaultLight : defaultDark),
+                            }
                           })
                         }
                       >
-                        Copiar tema claro
+                        Restaurar cores
                       </button>
+                      {themeMode === 'dark' && (
+                        <button
+                          className="ed-button ed-secondary"
+                          onClick={() =>
+                            edit((data) => {
+                              data.themes.dark = { ...data.themes.light }
+                            })
+                          }
+                        >
+                          Copiar tema claro
+                        </button>
+                      )}
+                    </div>
+                    {contrastWarnings.length > 0 ? (
+                      <p className="ed-contrast-warning" role="status">
+                        Contraste abaixo de 4,5:1 em: {contrastWarnings.join(', ')}. Ajuste as cores
+                        antes de publicar.
+                      </p>
+                    ) : (
+                      <p className="ed-hint">
+                        Contraste principal de texto aprovado (mínimo 4,5:1).
+                      </p>
                     )}
-                  </div>
-                  {contrastWarnings.length > 0 ? (
-                    <p className="ed-contrast-warning" role="status">
-                      Contraste abaixo de 4,5:1 em: {contrastWarnings.join(', ')}. Ajuste as cores
-                      antes de publicar.
-                    </p>
-                  ) : (
-                    <p className="ed-hint">Contraste principal de texto aprovado (mínimo 4,5:1).</p>
-                  )}
-                </section>
+                  </section>
+                </div>
+                <IdentityPreview
+                  key={currentId}
+                  draft={draft}
+                  templateId={currentId}
+                  editedTheme={themeMode}
+                  group={colorGroup}
+                  groupRevision={colorGroupRevision}
+                />
               </div>
             </>
           )}
@@ -1205,6 +1448,7 @@ export function EditorApp() {
                       }
                     />
                     <ImageField
+                      templateId={currentId}
                       label="Imagem opcional"
                       value={selectedCategory.image}
                       onChange={(value) =>
@@ -1434,6 +1678,7 @@ export function EditorApp() {
                       />
                     </div>
                     <ImageField
+                      templateId={currentId}
                       label="Foto principal"
                       value={selectedProduct.image}
                       onChange={(value) =>
@@ -1756,6 +2001,7 @@ export function EditorApp() {
                       }
                     />
                     <ImageField
+                      templateId={currentId}
                       label="Fotografia"
                       value={selectedAddon.image}
                       onChange={(value) =>
@@ -2106,6 +2352,30 @@ export function EditorApp() {
               )}
             </>
           )}
+          {section === 'project' && currentId && (
+            <ProjectPanel
+              templateId={currentId}
+              draft={draft}
+              docs={projectDocs}
+              captures={projectCaptures}
+              hasPublished={projectPublished}
+              codeExportAvailable={codeExportAvailable}
+              exportVersion={exportVersion}
+              exportCaptures={exportCaptures}
+              exportAssets={exportAssets}
+              onVersionChange={setExportVersion}
+              onCapturesChange={setExportCaptures}
+              onAssetsChange={setExportAssets}
+              onDocsChange={(value) => {
+                setProjectDocs(value)
+                setProjectDirty(true)
+              }}
+              onCaptureListChange={setProjectCaptures}
+              onSave={() => run(save)}
+              onError={setError}
+              onNotice={setNotice}
+            />
+          )}
           {section === 'settings' && (
             <>
               <div className="ed-page-intro">
@@ -2190,28 +2460,44 @@ export function EditorApp() {
             <h2 id="ed-modal-title">
               {
                 {
-                  create: 'Novo template',
-                  saveAs: 'Salvar como novo template',
-                  rename: 'Renomear template',
-                  delete: 'Excluir template?',
+                  create: 'Novo tema',
+                  saveAs: 'Salvar como novo tema',
+                  rename: 'Renomear tema',
+                  delete: 'Excluir tema?',
                   publish: 'Publicar cardápio?',
                 }[modal.kind]
               }
             </h2>
             <p>
               {modal.kind === 'publish'
-                ? 'A versão atual passará a aparecer para os clientes. Outros templates ficarão preservados.'
+                ? `Publicar ${templates.find((item) => item.id === modal.id)?.name || 'este tema'} no cardápio público? Os outros temas serão preservados.`
                 : modal.kind === 'delete'
-                  ? 'Esta ação exclui o rascunho e não pode ser desfeita.'
+                  ? `Excluir ${templates.find((item) => item.id === modal.id)?.name || 'este tema'}? Esta ação não pode ser desfeita.`
                   : 'Escolha um nome para identificar este cardápio na biblioteca.'}
             </p>
             {['create', 'saveAs', 'rename'].includes(modal.kind) && (
               <Input
-                label="Nome do template"
+                label="Nome do tema"
                 value={modalName}
                 onChange={setModalName}
                 placeholder="Ex.: Cardápio principal"
               />
+            )}
+            {modal.kind === 'create' && templates.length > 0 && (
+              <label className="ed-field">
+                <span>Criar a partir de</span>
+                <select
+                  value={createSourceId}
+                  onChange={(event) => setCreateSourceId(event.target.value)}
+                >
+                  <option value="">Tema vazio</option>
+                  {templates.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
             )}
             <div className="ed-modal-actions">
               <button

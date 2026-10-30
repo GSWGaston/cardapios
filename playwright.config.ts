@@ -2,6 +2,8 @@ import { defineConfig } from '@playwright/test'
 import { randomBytes, scryptSync } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { createClient } from '@libsql/client'
+import { demoTemplate } from './src/data/template'
 
 mkdirSync('data', { recursive: true })
 const passwordFile = resolve('data/editor-test-password')
@@ -11,6 +13,27 @@ const testPassword = readFileSync(passwordFile, 'utf8')
 const salt = randomBytes(24).toString('hex')
 process.env.EDITOR_TEST_PASSWORD = testPassword
 const passwordHash = `scrypt:${salt}:${scryptSync(testPassword, salt, 64).toString('hex')}`
+const testDb = createClient({ url: 'file:./data/test-cardapio-v2.db' })
+await testDb.batch(
+  [
+    'CREATE TABLE IF NOT EXISTS templates (id TEXT PRIMARY KEY, name TEXT NOT NULL, draft TEXT NOT NULL, published TEXT, updated_at TEXT NOT NULL)',
+    'CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+  ],
+  'write',
+)
+const existing = await testDb.execute("SELECT value FROM settings WHERE key='published_id'")
+if (!existing.rows[0]) {
+  const json = JSON.stringify(demoTemplate())
+  await testDb.execute({
+    sql: 'INSERT OR IGNORE INTO templates VALUES (?,?,?,?,?)',
+    args: ['demo', 'Cardápio demonstrativo', json, json, new Date().toISOString()],
+  })
+  await testDb.execute({
+    sql: "INSERT INTO settings (key,value) VALUES ('published_id',?)",
+    args: ['demo'],
+  })
+}
+testDb.close()
 
 export default defineConfig({
   testDir: './tests',

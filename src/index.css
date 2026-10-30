@@ -2281,6 +2281,56 @@ html[data-menu-theme] .search-field input,
 html[data-menu-theme] .notes-section textarea {
   color: var(--menu-text);
 }
+
+/* The editor's embedded preview renders the public components with a focused crop. */
+html[data-preview-context]:not([data-preview-context='overview']):not(
+    [data-preview-context='structure']
+  )
+  .hero,
+html[data-preview-context]:not([data-preview-context='overview']) .catalog-intro,
+html[data-preview-context]:not([data-preview-context='overview']) .products-heading,
+html[data-preview-context]:not([data-preview-context='overview']) .catalog-tools,
+html[data-preview-context]:not([data-preview-context='overview']) .menu-bottom,
+html[data-preview-context]:not([data-preview-context='overview']) .footer {
+  display: none;
+}
+html[data-preview-context]:is(
+    [data-preview-context='cards'],
+    [data-preview-context='actions'],
+    [data-preview-context='typography'],
+    [data-preview-context='icons'],
+    [data-preview-context='borders']
+  )
+  .site-header,
+html[data-preview-context]:is(
+    [data-preview-context='cards'],
+    [data-preview-context='actions'],
+    [data-preview-context='typography'],
+    [data-preview-context='icons'],
+    [data-preview-context='borders']
+  )
+  .category-nav {
+  display: none;
+}
+html[data-preview-context='structure'] .product-grid,
+html[data-preview-context='structure'] .category-nav {
+  display: none;
+}
+html[data-preview-context='selection'] .site-header {
+  display: none;
+}
+html[data-preview-context]:not([data-preview-context='overview']) .catalog {
+  padding-top: 18px;
+}
+html[data-preview-context]:not([data-preview-context='overview']) .product-grid {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 390px;
+}
+html[data-preview-context]:not([data-preview-context='overview'])
+  .product-grid
+  .product-card:not(:first-child) {
+  display: none;
+}
 .detail-ingredients {
   font-size: 13px;
   line-height: 1.55;

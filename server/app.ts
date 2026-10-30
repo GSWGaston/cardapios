@@ -4,10 +4,13 @@ import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from
 import { db, initDb } from './db.ts'
 import { templateSchema, validatePublish } from './schema.ts'
 import { emptyTemplate } from '../src/data/template.ts'
+import { cloneTemplateData } from './cloneTemplate.ts'
+import { registerProjectRoutes } from './projectRoutes.ts'
+import { assetsBelongTo } from './assetOwnership.ts'
 
 export const app = express()
 app.disable('x-powered-by')
-app.use(express.json({ limit: '3mb' }))
+app.use(express.json({ limit: '8mb' }))
 app.use(async (_req, _res, next) => {
   try {
     await initDb()
@@ -192,23 +195,62 @@ app.post('/api/templates', requireAuth, async (req, res) => {
     }
     data = parsed.data
   }
+  if (req.body?.draft && !(await assetsBelongTo(data, String(req.body?.copyProjectFrom || '')))) {
+    res.status(403).json({ error: 'Uma imagem pertence a outro tema.' })
+    return
+  }
+  if (req.body?.sourceId || req.body?.draft) data = cloneTemplateData(data)
   const id = randomUUID()
-  await db.execute({
-    sql: 'INSERT INTO templates (id, name, draft, updated_at) VALUES (?, ?, ?, ?)',
-    args: [id, name, JSON.stringify(data), new Date().toISOString()],
-  })
+  const copyProjectFrom = req.body?.sourceId || req.body?.copyProjectFrom
+  const tx = await db.transaction('write')
+  try {
+    await tx.execute({
+      sql: 'INSERT INTO templates (id, name, draft, updated_at) VALUES (?, ?, ?, ?)',
+      args: [id, name, JSON.stringify(data), new Date().toISOString()],
+    })
+    if (copyProjectFrom) {
+      const source = await tx.execute({
+        sql: 'SELECT id FROM templates WHERE id=?',
+        args: [String(copyProjectFrom)],
+      })
+      if (!source.rows[0]) throw new Error('Tema de origem não encontrado.')
+      await tx.execute({
+        sql: 'INSERT INTO project_docs (template_id,content) SELECT ?,content FROM project_docs WHERE template_id=?',
+        args: [id, String(copyProjectFrom)],
+      })
+      await tx.execute({
+        sql: 'INSERT OR IGNORE INTO asset_owners (asset_id,template_id) SELECT asset_id,? FROM asset_owners WHERE template_id=?',
+        args: [id, String(copyProjectFrom)],
+      })
+      const captures = await tx.execute({
+        sql: 'SELECT id FROM project_captures WHERE template_id=?',
+        args: [String(copyProjectFrom)],
+      })
+      for (const capture of captures.rows)
+        await tx.execute({
+          sql: 'INSERT INTO project_captures SELECT ?, ?, title, description, screen, device, mode, state, mime, data, created_at, position FROM project_captures WHERE id=?',
+          args: [randomUUID(), id, String(capture.id)],
+        })
+    }
+    await tx.commit()
+  } catch (error) {
+    await tx.rollback()
+    throw error
+  }
   res.status(201).json({ id })
 })
 app.put('/api/templates/:id', requireAuth, async (req, res) => {
   const parsed = templateSchema.safeParse(req.body?.draft)
   const name = String(req.body?.name || '').trim()
   if (!parsed.success || !name || name.length > 100) {
-    res
-      .status(400)
-      .json({
-        error: 'Revise o nome e os dados do template.',
-        details: parsed.success ? undefined : parsed.error.flatten(),
-      })
+    res.status(400).json({
+      error: 'Revise o nome e os dados do template.',
+      details: parsed.success ? undefined : parsed.error.flatten(),
+    })
+    return
+  }
+  if (!(await assetsBelongTo(parsed.data, String(req.params.id)))) {
+    res.status(403).json({ error: 'Uma imagem pertence a outro tema.' })
     return
   }
   const result = await db.execute({
@@ -227,10 +269,30 @@ app.delete('/api/templates/:id', requireAuth, async (req, res) => {
     res.status(409).json({ error: 'Publique outro template antes de excluir este.' })
     return
   }
-  const result = await db.execute({
-    sql: 'DELETE FROM templates WHERE id=?',
-    args: [String(req.params.id)],
-  })
+  const tx = await db.transaction('write')
+  let result
+  try {
+    await tx.execute({
+      sql: 'DELETE FROM project_captures WHERE template_id=?',
+      args: [String(req.params.id)],
+    })
+    await tx.execute({
+      sql: 'DELETE FROM project_docs WHERE template_id=?',
+      args: [String(req.params.id)],
+    })
+    await tx.execute({
+      sql: 'DELETE FROM asset_owners WHERE template_id=?',
+      args: [String(req.params.id)],
+    })
+    result = await tx.execute({
+      sql: 'DELETE FROM templates WHERE id=?',
+      args: [String(req.params.id)],
+    })
+    await tx.commit()
+  } catch (error) {
+    await tx.rollback()
+    throw error
+  }
   if (!result.rowsAffected) {
     res.status(404).json({ error: 'Template não encontrado.' })
     return
@@ -274,14 +336,22 @@ app.post('/api/templates/:id/publish', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
+registerProjectRoutes(app, requireAuth)
+
 app.post('/api/assets', requireAuth, async (req, res) => {
-  const { filename, data } = req.body || {}
+  const { filename, data, templateId } = req.body || {}
   if (
     typeof filename !== 'string' ||
     typeof data !== 'string' ||
+    typeof templateId !== 'string' ||
     !/^data:image\/(svg\+xml|png|jpeg);base64,/.test(data)
   ) {
     res.status(400).json({ error: 'Envie SVG, PNG ou JPEG.' })
+    return
+  }
+  const owner = await db.execute({ sql: 'SELECT id FROM templates WHERE id=?', args: [templateId] })
+  if (!owner.rows[0]) {
+    res.status(404).json({ error: 'Tema não encontrado.' })
     return
   }
   const bytes = Buffer.from(data.slice(data.indexOf(',') + 1), 'base64')
@@ -307,10 +377,18 @@ app.post('/api/assets', requireAuth, async (req, res) => {
       .webp({ quality: 85 })
       .toBuffer()
     const id = randomUUID()
-    await db.execute({
-      sql: 'INSERT INTO assets VALUES (?, ?, ?, ?)',
-      args: [id, 'image/webp', optimized, new Date().toISOString()],
-    })
+    const tx = await db.transaction('write')
+    try {
+      await tx.execute({
+        sql: 'INSERT INTO assets VALUES (?, ?, ?, ?)',
+        args: [id, 'image/webp', optimized, new Date().toISOString()],
+      })
+      await tx.execute({ sql: 'INSERT INTO asset_owners VALUES (?,?)', args: [id, templateId] })
+      await tx.commit()
+    } catch (error) {
+      await tx.rollback()
+      throw error
+    }
     res.status(201).json({ url: `/api/assets/${id}`, filename })
   } catch {
     res.status(400).json({ error: 'Arquivo de imagem inválido.' })

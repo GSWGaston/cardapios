@@ -106,6 +106,33 @@ export interface MenuTemplate {
   dirty: boolean
 }
 
+export interface ProjectDocs {
+  title: string
+  description: string
+  establishment: string
+  audience: string
+  technologies: string
+  siteUrl: string
+  repositoryUrl: string
+  codeRef: string
+  architecture: string
+  operations: string
+  notes: string
+  aiInstructions: string
+}
+
+export interface ProjectCapture {
+  id: string
+  title: string
+  description: string
+  screen: string
+  device: string
+  mode: string
+  state: string
+  createdAt: string
+  position: number
+}
+
 export interface CartItem {
   id: string
   product: Product
